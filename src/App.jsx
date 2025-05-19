@@ -20,8 +20,8 @@ function App() {
           <h3>Patient Information</h3>
           <p>Name: {patientInfo.name}</p>
           <p>Birthdate: {patientInfo.birthdate}</p>
-          <p>Sex: {patientInfo.sex}</p>
           <p>Age: {patientInfo.age}</p>
+          <p>Sex: {patientInfo.sex}</p>
         </div>
       )}
 
