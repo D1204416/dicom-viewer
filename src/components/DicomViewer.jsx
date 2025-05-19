@@ -1,5 +1,5 @@
 // components/DicomViewer.jsx
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import * as cornerstone from 'cornerstone-core';
 import * as cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
 import * as dicomParser from 'dicom-parser';
@@ -16,42 +16,60 @@ cornerstoneTools.external.Hammer = Hammer;
 cornerstoneWADOImageLoader.configure({});
 cornerstoneTools.init();
 
-function DicomViewer({ file, canvasRef, activeTool, onLabelComplete }) {
-  useEffect(() => {
-    if (!file || !canvasRef.current) return;
+const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }, ref) => {
+  const elementRef = useRef(null);
 
-    const element = canvasRef.current;
+  useImperativeHandle(ref, () => ({
+    startDrawing: () => {
+      cornerstoneTools.setToolActive('FreehandRoi', { mouseButtonMask: 1 });
+    },
+    removeAnnotation: (uid) => {
+      const toolState = cornerstoneTools.globalToolStateManager.get('FreehandRoi');
+      const toolData = toolState[elementRef.current?.id] || [];
+      const remaining = toolData.data.filter(item => item.annotationUID !== uid);
+      toolState[elementRef.current?.id].data = remaining;
+      cornerstone.updateImage(elementRef.current);
+    }
+  }));
+
+  useEffect(() => {
+    if (!file || !elementRef.current) return;
+
+    const element = elementRef.current;
     cornerstone.enable(element);
 
     const imageId = cornerstoneWADOImageLoader.wadouri.fileManager.add(file);
-    cornerstone.loadImage(imageId).then((image) => {
+    cornerstone.loadImage(imageId).then(image => {
       cornerstone.displayImage(element, image);
 
-      // 註冊工具並確保能顯示標記
       cornerstoneTools.addTool(cornerstoneTools.FreehandRoiTool);
+      cornerstoneTools.setToolPassive('FreehandRoi');
 
-      if (activeTool === 'FreehandRoi') {
-        cornerstoneTools.setToolActive('FreehandRoi', { mouseButtonMask: 1 });
-      } else {
-        cornerstoneTools.setToolPassive('FreehandRoi'); // 保持可見但不可互動
-      }
+      element.addEventListener('cornerstonetoolsmeasurementcompleted', (evt) => {
+        console.log('📌 evt.detail:', evt.detail);
+        console.log('🧩 measurementData:', evt.detail?.measurementData);
 
-      element.removeEventListener('cornerstonetoolsmeasurementcompleted', onLabelComplete);
-      element.addEventListener('cornerstonetoolsmeasurementcompleted', onLabelComplete);
-    }).catch((err) => {
-      console.error('Failed to display image:', err);
+        const uid = evt.detail?.measurementData?.uid ?? `auto-${Date.now()}`;
+        onLabelComplete(uid);
+      });
     });
-  }, [file, canvasRef, activeTool]);
+  }, [file]);
+
+  useEffect(() => {
+    if (selectedAnnotationUID && elementRef.current) {
+      cornerstoneTools.annotation.state.setAnnotationSelected(selectedAnnotationUID);
+    }
+  }, [selectedAnnotationUID]);
 
   return (
     <div>
       <h2>DICOM Image</h2>
       <div
-        ref={canvasRef}
+        ref={elementRef}
         style={{ width: 512, height: 512, background: 'black' }}
       />
     </div>
   );
-}
+});
 
 export default DicomViewer;

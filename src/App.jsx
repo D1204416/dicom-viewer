@@ -8,32 +8,31 @@ import LabelList from './components/LabelList';
 function App() {
   const [patientInfo, setPatientInfo] = useState(null);
   const [dicomFile, setDicomFile] = useState(null);
-  const dicomCanvasRef = useRef(null);
-  const [activeTool, setActiveTool] = useState(null);
-  const [labelCounter, setLabelCounter] = useState(1);
   const [labels, setLabels] = useState([]);
+  const [labelCounter, setLabelCounter] = useState(1);
+  const [selectedAnnotationUID, setSelectedAnnotationUID] = useState(null);
+  const viewerRef = useRef(null);
 
   const handleAddLabel = () => {
-    setActiveTool('FreehandRoi');
+    viewerRef.current?.startDrawing();
   };
 
-  const handleEditLabel = () => {
-    setActiveTool('FreehandRoi');
-  };
-
-  const handleLabelComplete = (event) => {
+  const handleLabelComplete = (uid) => {
     const newLabel = {
-      id: Date.now(),
-      name: `Label ${labelCounter}`,
-      toolData: event.detail.annotation,
+      uid,
+      name: `Label ${labelCounter}`
     };
-    setLabels([...labels, newLabel]);
-    setLabelCounter(labelCounter + 1);
-    setActiveTool(null);
+    setLabels(prev => [...prev, newLabel]);
+    setLabelCounter(prev => prev + 1);
   };
 
-  const handleDeleteLabel = (id) => {
-    setLabels(labels.filter(label => label.id !== id));
+  const handleEditLabel = (uid) => {
+    setSelectedAnnotationUID(uid);
+  };
+
+  const handleDeleteLabel = (uid) => {
+    setLabels(labels.filter(label => label.uid !== uid));
+    viewerRef.current?.removeAnnotation(uid);
   };
 
   return (
@@ -53,17 +52,17 @@ function App() {
 
       <div style={{ display: 'flex' }}>
         <DicomViewer
+          ref={viewerRef}
           file={dicomFile}
-          canvasRef={dicomCanvasRef}
-          activeTool={activeTool}
           onLabelComplete={handleLabelComplete}
+          selectedAnnotationUID={selectedAnnotationUID}
         />
         <div style={{ marginLeft: '20px' }}>
           <LabelTool onAddLabel={handleAddLabel} />
           <LabelList
             labels={labels}
-            onDelete={handleDeleteLabel}
             onEdit={handleEditLabel}
+            onDelete={handleDeleteLabel}
           />
         </div>
       </div>
