@@ -1,15 +1,11 @@
 // components/LabelTool.jsx
 import React from 'react';
 
-function LabelTool() {
-  const handleAddLabel = () => {
-    console.log('Add new label');
-  };
-
+function LabelTool({ onAddLabel }) {
   return (
-    <div style={{ marginLeft: '20px' }}>
+    <div>
       <h2>Label Tools</h2>
-      <button onClick={handleAddLabel}>Add Label</button>
+      <button onClick={onAddLabel}>Add Label</button>
     </div>
   );
 }
