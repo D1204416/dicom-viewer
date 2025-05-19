@@ -7,6 +7,7 @@ import * as cornerstoneTools from 'cornerstone-tools';
 import * as cornerstoneMath from 'cornerstone-math';
 import Hammer from 'hammerjs';
 
+// 初始化 cornerstone 套件依賴
 cornerstoneWADOImageLoader.external.cornerstone = cornerstone;
 cornerstoneWADOImageLoader.external.dicomParser = dicomParser;
 cornerstoneTools.external.cornerstone = cornerstone;
@@ -16,7 +17,7 @@ cornerstoneTools.external.Hammer = Hammer;
 cornerstoneWADOImageLoader.configure({});
 cornerstoneTools.init();
 
-const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }, ref) => {
+const DicomViewer = forwardRef(({ file, onLabelComplete }, ref) => {
   const elementRef = useRef(null);
 
   useImperativeHandle(ref, () => ({
@@ -24,12 +25,26 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
       cornerstoneTools.setToolActive('FreehandRoi', { mouseButtonMask: 1 });
     },
     removeAnnotation: (uid) => {
-      const toolState = cornerstoneTools.globalToolStateManager.get('FreehandRoi');
-      const toolData = toolState[elementRef.current?.id] || [];
-      const remaining = toolData.data.filter(item => item.annotationUID !== uid);
-      toolState[elementRef.current?.id].data = remaining;
-      cornerstone.updateImage(elementRef.current);
+      const element = elementRef.current;
+      if (!element) return;
+
+      const toolState = cornerstoneTools.getToolState(element, 'FreehandRoi');
+      if (!toolState || !toolState.data) return;
+
+      const originalData = toolState.data;
+
+      // 先清除全部
+      cornerstoneTools.clearToolState(element, 'FreehandRoi');
+
+      // 把未刪除的標記重新加入
+      const remaining = originalData.filter(item => item?.measurementData?.uid !== uid);
+      remaining.forEach(item => {
+        cornerstoneTools.addToolState(element, 'FreehandRoi', item);
+      });
+
+      cornerstone.updateImage(element);
     }
+
   }));
 
   useEffect(() => {
@@ -45,21 +60,13 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
       cornerstoneTools.addTool(cornerstoneTools.FreehandRoiTool);
       cornerstoneTools.setToolPassive('FreehandRoi');
 
+      // 當標記完成時回傳 UID
       element.addEventListener('cornerstonetoolsmeasurementcompleted', (evt) => {
-        console.log('📌 evt.detail:', evt.detail);
-        console.log('🧩 measurementData:', evt.detail?.measurementData);
-
         const uid = evt.detail?.measurementData?.uid ?? `auto-${Date.now()}`;
         onLabelComplete(uid);
       });
     });
   }, [file]);
-
-  useEffect(() => {
-    if (selectedAnnotationUID && elementRef.current) {
-      cornerstoneTools.annotation.state.setAnnotationSelected(selectedAnnotationUID);
-    }
-  }, [selectedAnnotationUID]);
 
   return (
     <div>
