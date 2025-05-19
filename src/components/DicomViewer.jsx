@@ -1,22 +1,37 @@
 // components/DicomViewer.jsx
-import React, { useRef, useEffect } from 'react';
+import React, { useEffect } from 'react';
+import * as cornerstone from 'cornerstone-core';
+import * as cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
+import * as dicomParser from 'dicom-parser';
+import * as cornerstoneMath from 'cornerstone-math';
 
-function DicomViewer() {
-  const canvasRef = useRef(null);
+cornerstoneWADOImageLoader.external.cornerstone = cornerstone;
+cornerstoneWADOImageLoader.external.dicomParser = dicomParser;
+cornerstoneWADOImageLoader.configure({
+  beforeSend: function(xhr) {
+    // 可設定授權等 header
+  },
+});
 
+function DicomViewer({ file, canvasRef }) {
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = 'black';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = 'white';
-    ctx.fillText('DICOM Image Placeholder', 10, 50);
-  }, []);
+    if (!file || !canvasRef.current) return;
+
+    const element = canvasRef.current;
+    cornerstone.enable(element);
+
+    const imageId = cornerstoneWADOImageLoader.wadouri.fileManager.add(file);
+    cornerstone.loadImage(imageId).then((image) => {
+      cornerstone.displayImage(element, image);
+    }).catch((err) => {
+      console.error('Failed to display image:', err);
+    });
+  }, [file, canvasRef]);
 
   return (
     <div>
       <h2>DICOM Image</h2>
-      <canvas ref={canvasRef} width={512} height={512} />
+      <div ref={canvasRef} style={{ width: 512, height: 512, background: 'black' }} />
     </div>
   );
 }

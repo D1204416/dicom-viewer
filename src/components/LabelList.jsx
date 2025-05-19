@@ -9,7 +9,6 @@ function LabelList() {
 
   const handleEdit = (id) => {
     console.log('Edit label:', id);
-    // TODO: 編輯標記邏輯
   };
 
   const handleDelete = (id) => {
@@ -32,4 +31,3 @@ function LabelList() {
 }
 
 export default LabelList;
-

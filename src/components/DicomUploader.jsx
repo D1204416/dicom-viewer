@@ -2,11 +2,12 @@
 import React from 'react';
 import * as dicomParser from 'dicom-parser';
 
-function DicomUploader({ setPatientInfo }) {
+function DicomUploader({ setPatientInfo, setDicomFile }) {
   const handleUpload = (e) => {
     const file = e.target.files[0];
-    const reader = new FileReader();
+    setDicomFile(file);
 
+    const reader = new FileReader();
     reader.onload = function () {
       try {
         const arrayBuffer = reader.result;
@@ -17,7 +18,6 @@ function DicomUploader({ setPatientInfo }) {
         const birthdate = dataSet.string('x00100030');
         const sex = dataSet.string('x00100040');
 
-        // 簡單推估年齡
         const birthYear = birthdate ? birthdate.substring(0, 4) : '0000';
         const currentYear = new Date().getFullYear();
         const age = currentYear - parseInt(birthYear);

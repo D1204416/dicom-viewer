@@ -1,5 +1,5 @@
 // App.jsx
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import DicomUploader from './components/DicomUploader';
 import DicomViewer from './components/DicomViewer';
 import LabelTool from './components/LabelTool';
@@ -7,11 +7,13 @@ import LabelList from './components/LabelList';
 
 function App() {
   const [patientInfo, setPatientInfo] = useState(null);
+  const [dicomFile, setDicomFile] = useState(null);
+  const dicomCanvasRef = useRef(null);
 
   return (
     <div className="app-container">
       <h1>DICOM Viewer</h1>
-      <DicomUploader setPatientInfo={setPatientInfo} />
+      <DicomUploader setPatientInfo={setPatientInfo} setDicomFile={setDicomFile} />
 
       {patientInfo && (
         <div>
@@ -24,7 +26,7 @@ function App() {
       )}
 
       <div className="viewer-label-section" style={{ display: 'flex' }}>
-        <DicomViewer />
+        <DicomViewer file={dicomFile} canvasRef={dicomCanvasRef} />
         <LabelTool />
       </div>
       <LabelList />
