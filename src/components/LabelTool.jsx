@@ -1,3 +1,4 @@
+// components/LabelTool.jsx
 import React from 'react';
 
 function LabelTool() {

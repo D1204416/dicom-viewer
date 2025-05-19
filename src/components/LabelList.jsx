@@ -1,3 +1,4 @@
+// components/LabelList.jsx
 import React, { useState } from 'react';
 
 function LabelList() {
@@ -31,3 +32,4 @@ function LabelList() {
 }
 
 export default LabelList;
+

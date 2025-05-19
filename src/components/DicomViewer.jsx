@@ -1,3 +1,4 @@
+// components/DicomViewer.jsx
 import React, { useRef, useEffect } from 'react';
 
 function DicomViewer() {
