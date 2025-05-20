@@ -99,7 +99,7 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
     return annotations;
   };
 
-  // 恢復保存的工具狀態
+  // 改進 restoreAnnotations 方法
   const restoreAnnotations = () => {
     const element = elementRef.current;
     if (!element || internalAnnotations.length === 0) return false;
@@ -119,6 +119,11 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
       
       // 更新圖像
       cornerstone.updateImage(element);
+      
+      // 延遲再次更新以確保正確渲染
+      setTimeout(() => {
+        cornerstone.updateImage(element);
+      }, 50);
       
       return true;
     } catch (error) {
@@ -146,7 +151,7 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
       return Promise.resolve(getAnnotations());
     },
     
-    // 更新編輯功能
+    // 更新編輯功能，修正需要點擊兩次的問題
     editAnnotation: (uid) => {
       console.log('Attempting to edit annotation with UID:', uid);
       const element = elementRef.current;
@@ -167,7 +172,12 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
           console.log('Failed to restore annotations');
           return false;
         }
+        
+        // 重新獲取恢復後的工具狀態
         toolState = cornerstoneTools.getToolState(element, 'FreehandRoi');
+        
+        // 強制更新圖像以顯示恢復的標記
+        cornerstone.updateImage(element);
       }
       
       // 再次檢查工具狀態
@@ -176,7 +186,7 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
         return false;
       }
       
-      // 啟用 FreehandRoi 工具進行編輯
+      // 確保工具處於活動狀態
       cornerstoneTools.setToolActive('FreehandRoi', { mouseButtonMask: 1 });
       
       // 查找匹配的標記
@@ -184,10 +194,10 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
       toolState.data.forEach((item, index) => {
         // 檢查所有可能的 UID 位置
         const itemUid = item.uid || 
-                       item.uuid || 
-                       item.measurementData?.uid || 
-                       item._id || 
-                       item.id;
+                      item.uuid || 
+                      item.measurementData?.uid || 
+                      item._id || 
+                      item.id;
         
         if (itemUid === uid) {
           console.log(`Found matching annotation at index ${index}`);
@@ -208,8 +218,14 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
         }
       });
       
-      // 更新圖像
+      // 更新圖像 - 使用 setTimeout 確保更新更可靠
       cornerstone.updateImage(element);
+      
+      // 延遲再次更新，確保標記顯示
+      setTimeout(() => {
+        cornerstone.updateImage(element);
+        console.log('Forced second image update for better rendering');
+      }, 50);
       
       // 保存當前狀態
       saveAnnotations();
@@ -283,6 +299,11 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
         
         // 更新圖像
         cornerstone.updateImage(element);
+        
+        // 強制第二次更新以確保圖像正確刷新
+        setTimeout(() => {
+          cornerstone.updateImage(element);
+        }, 50);
         
         // 檢查刪除後的狀態
         console.log('Tool state after removal:');
@@ -404,6 +425,11 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
             
             // 更新圖像以確保變更生效
             cornerstone.updateImage(element);
+            
+            // 強制第二次更新以確保顯示
+            setTimeout(() => {
+              cornerstone.updateImage(element);
+            }, 50);
           }
           
           // 記錄新添加標記後的工具狀態
