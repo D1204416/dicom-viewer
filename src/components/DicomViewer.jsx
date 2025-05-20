@@ -20,6 +20,7 @@ cornerstoneTools.init();
 const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }, ref) => {
   const elementRef = useRef(null);
   const measurementCompletedHandlerRef = useRef(null);
+  const lastAddedAnnotationRef = useRef(null);
   // 用於保存和恢復標記數據
   const [internalAnnotations, setInternalAnnotations] = useState([]);
   
@@ -235,7 +236,18 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
         console.log('No tool state found, attempting to restore');
         const restored = restoreAnnotations();
         if (!restored) {
-          console.log('Failed to restore annotations');
+          console.log('Failed to restore annotations, checking internal annotations');
+          
+          // 如果我們有內部標記但無法恢復到工具狀態，可能是 cornerstone 工具出現了問題
+          // 在這種情況下，我們可以將內部標記過濾並更新
+          if (internalAnnotations.length > 0) {
+            console.log('Removing annotation from internal state only');
+            setInternalAnnotations(prev => 
+              prev.filter(annotation => annotation.uid !== uid)
+            );
+            return true; // 成功從內部狀態中移除
+          }
+          
           return false;
         }
         toolState = cornerstoneTools.getToolState(element, 'FreehandRoi');
@@ -276,13 +288,25 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
         console.log('Tool state after removal:');
         logToolState();
         
-        // 更新內部保存的標記
-        saveAnnotations();
+        // 更新內部保存的標記 - 重新獲取而不是修改當前
+        const updatedAnnotations = getAnnotations();
+        setInternalAnnotations(updatedAnnotations);
         
-        console.log('Annotation removed successfully');
+        console.log('Annotation removed successfully and state updated');
         return true;
       } else {
         console.log('No matching annotation found to remove');
+        
+        // 嘗試從內部標記中移除
+        const hadAnnotation = internalAnnotations.some(a => a.uid === uid);
+        if (hadAnnotation) {
+          setInternalAnnotations(prev => 
+            prev.filter(annotation => annotation.uid !== uid)
+          );
+          console.log('Removed from internal annotations only');
+          return true;
+        }
+        
         return false;
       }
     }
@@ -298,15 +322,32 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
     cornerstone.loadImage(imageId).then(image => {
       cornerstone.displayImage(element, image);
 
-      // 嘗試安全地添加工具
+      // 改進工具的添加方式
       try {
-        console.log('Adding FreehandRoi tool');
-        cornerstoneTools.addTool(cornerstoneTools.FreehandRoiTool);
+        // 檢查工具是否已在全局註冊
+        let toolAlreadyRegistered = false;
+        try {
+          toolAlreadyRegistered = cornerstoneTools.getToolForElement(element, 'FreehandRoi');
+        } catch (error) {
+          // 忽略可能的錯誤，假設工具未註冊
+          toolAlreadyRegistered = false;
+        }
+        
+        if (!toolAlreadyRegistered) {
+          console.log('Registering FreehandRoi tool globally');
+          try {
+            // 嘗試添加工具到工具箱而不是元素
+            cornerstoneTools.addTool(cornerstoneTools.FreehandRoiTool);
+          } catch (error) {
+            console.log('Tool may already be registered globally:', error);
+          }
+        }
+        
+        // 然後啟用工具
         cornerstoneTools.setToolPassive('FreehandRoi');
       } catch (error) {
-        console.log('Tool may already be added (expected):', error);
-        // 即使報錯也繼續（可能工具已添加）
-        cornerstoneTools.setToolPassive('FreehandRoi');
+        console.error('Error setting up tools:', error);
+        // 繼續執行，不要讓錯誤阻止功能
       }
 
       // 移除任何現有的事件處理器
@@ -353,6 +394,12 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
               lastAnnotation.measurementData.uid = uid;
             }
             
+            // 保存最後添加的標記引用
+            lastAddedAnnotationRef.current = { 
+              uid,
+              data: JSON.parse(JSON.stringify(lastAnnotation)) // 深拷貝
+            };
+            
             console.log('UID set on tool state:', uid);
             
             // 更新圖像以確保變更生效
@@ -362,7 +409,7 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
           // 記錄新添加標記後的工具狀態
           logToolState();
           
-          // 保存當前狀態 - 這是關鍵改進
+          // 保存當前狀態
           saveAnnotations();
           
           // 僅在 UID 已設置後回調
