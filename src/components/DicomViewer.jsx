@@ -113,6 +113,10 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
       // 恢復保存的標記
       internalAnnotations.forEach(annotation => {
         if (annotation.data) {
+          // 確保標記可見
+          if (annotation.data.visible !== undefined) {
+            annotation.data.visible = true;
+          }
           cornerstoneTools.addToolState(element, 'FreehandRoi', annotation.data);
         }
       });
@@ -132,12 +136,41 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
     }
   };
 
+  // 確保所有標記可見
+  const ensureAnnotationsVisible = () => {
+    const element = elementRef.current;
+    if (!element) return;
+    
+    const toolState = cornerstoneTools.getToolState(element, 'FreehandRoi');
+    if (!toolState || !toolState.data) return;
+    
+    // 設置所有標記為可見
+    let updated = false;
+    toolState.data.forEach(annotation => {
+      if (annotation.visible !== undefined) {
+        annotation.visible = true;
+        updated = true;
+      }
+    });
+    
+    // 只在實際更新時重繪
+    if (updated) {
+      // 更新圖像
+      cornerstone.updateImage(element);
+    }
+  };
+
   useImperativeHandle(ref, () => ({
     startDrawing: () => {
       console.log('Start drawing activated');
       // 確保工具狀態可用
       restoreAnnotations();
+      
+      // 先設置為主動模式以啟用繪製
       cornerstoneTools.setToolActive('FreehandRoi', { mouseButtonMask: 1 });
+      
+      // 確保所有現有標記都設置為可見
+      ensureAnnotationsVisible();
     },
     
     // 獲取所有標記信息
@@ -151,7 +184,7 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
       return Promise.resolve(getAnnotations());
     },
     
-    // 更新編輯功能，修正需要點擊兩次的問題
+    // 更新編輯功能
     editAnnotation: (uid) => {
       console.log('Attempting to edit annotation with UID:', uid);
       const element = elementRef.current;
@@ -175,9 +208,6 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
         
         // 重新獲取恢復後的工具狀態
         toolState = cornerstoneTools.getToolState(element, 'FreehandRoi');
-        
-        // 強制更新圖像以顯示恢復的標記
-        cornerstone.updateImage(element);
       }
       
       // 再次檢查工具狀態
@@ -205,27 +235,31 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
           
           // 標記為活動狀態
           try {
-            item.active = true;
-            if (item.handles) {
+            if (item.active !== undefined) {
+              item.active = true;
+            }
+            if (item.visible !== undefined) {
+              item.visible = true;
+            }
+            if (item.handles && item.handles.activeHandleIndex !== undefined) {
               item.handles.activeHandleIndex = 0;
             }
           } catch (error) {
             console.error('Error activating annotation:', error);
           }
         } else if (item) {
-          // 取消其他標記的活動狀態
-          item.active = false;
+          // 取消其他標記的活動狀態，但保持可見
+          if (item.active !== undefined) {
+            item.active = false;
+          }
+          if (item.visible !== undefined) {
+            item.visible = true;
+          }
         }
       });
       
-      // 更新圖像 - 使用 setTimeout 確保更新更可靠
+      // 更新圖像
       cornerstone.updateImage(element);
-      
-      // 延遲再次更新，確保標記顯示
-      setTimeout(() => {
-        cornerstone.updateImage(element);
-        console.log('Forced second image update for better rendering');
-      }, 50);
       
       // 保存當前狀態
       saveAnnotations();
@@ -300,10 +334,8 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
         // 更新圖像
         cornerstone.updateImage(element);
         
-        // 強制第二次更新以確保圖像正確刷新
-        setTimeout(() => {
-          cornerstone.updateImage(element);
-        }, 50);
+        // 確保所有剩餘標記可見
+        ensureAnnotationsVisible();
         
         // 檢查刪除後的狀態
         console.log('Tool state after removal:');
@@ -343,32 +375,41 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
     cornerstone.loadImage(imageId).then(image => {
       cornerstone.displayImage(element, image);
 
-      // 改進工具的添加方式
+      // 簡化工具的添加方式，避免使用不相容的 API
       try {
-        // 檢查工具是否已在全局註冊
-        let toolAlreadyRegistered = false;
+        // 直接添加工具，不使用配置
         try {
-          toolAlreadyRegistered = cornerstoneTools.getToolForElement(element, 'FreehandRoi');
+          cornerstoneTools.addTool(cornerstoneTools.FreehandRoiTool);
         } catch (error) {
-          // 忽略可能的錯誤，假設工具未註冊
-          toolAlreadyRegistered = false;
+          console.log('FreehandRoi tool may already be registered:', error);
         }
         
-        if (!toolAlreadyRegistered) {
-          console.log('Registering FreehandRoi tool globally');
-          try {
-            // 嘗試添加工具到工具箱而不是元素
-            cornerstoneTools.addTool(cornerstoneTools.FreehandRoiTool);
-          } catch (error) {
-            console.log('Tool may already be registered globally:', error);
-          }
-        }
-        
-        // 然後啟用工具
+        // 啟用工具
         cornerstoneTools.setToolPassive('FreehandRoi');
+        
+        // 對於 cornerstone-tools 6.x，我們可以嘗試使用其他方式修改工具行為
+        try {
+          // 嘗試訪問全局工具狀態管理器
+          if (cornerstoneTools.globalImageIdSpecificToolStateManager) {
+            cornerstoneTools.globalImageIdSpecificToolStateManager.restoreToolState = true;
+          }
+          
+          // 嘗試直接修改 FreehandRoi 工具的配置
+          if (cornerstoneTools.FreehandRoi && 
+              typeof cornerstoneTools.FreehandRoi.setConfiguration === 'function') {
+            cornerstoneTools.FreehandRoi.setConfiguration({
+              // 禁用標記文字
+              showTextPreview: false,
+              showLabels: false,
+              drawHandles: true,
+              drawHandlesOnHover: false
+            });
+          }
+        } catch (configError) {
+          console.log('Error configuring tool (non-critical):', configError);
+        }
       } catch (error) {
         console.error('Error setting up tools:', error);
-        // 繼續執行，不要讓錯誤阻止功能
       }
 
       // 移除任何現有的事件處理器
@@ -415,6 +456,11 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
               lastAnnotation.measurementData.uid = uid;
             }
             
+            // 設置可見性（如果該屬性存在）
+            if (lastAnnotation.visible !== undefined) {
+              lastAnnotation.visible = true;
+            }
+            
             // 保存最後添加的標記引用
             lastAddedAnnotationRef.current = { 
               uid,
@@ -423,13 +469,20 @@ const DicomViewer = forwardRef(({ file, onLabelComplete, selectedAnnotationUID }
             
             console.log('UID set on tool state:', uid);
             
+            // 確保工具處於被動模式，這樣標記會保持可見
+            cornerstoneTools.setToolPassive('FreehandRoi');
+            
             // 更新圖像以確保變更生效
             cornerstone.updateImage(element);
             
-            // 強制第二次更新以確保顯示
+            // 強制多次更新以確保顯示
             setTimeout(() => {
               cornerstone.updateImage(element);
-            }, 50);
+            }, 30);
+            
+            setTimeout(() => {
+              cornerstone.updateImage(element);
+            }, 100);
           }
           
           // 記錄新添加標記後的工具狀態
